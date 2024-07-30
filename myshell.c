@@ -68,16 +68,13 @@ void findRedirect(char *args[]) {               // リダイレクトの指示�
 }
 
 void redirect(int fd, char *path, int flag) {   // リダイレクト処理をする
-  //
-  // externalCom 関数のどこかから呼び出される
-  //
-  // fd   : リダイレクトするファイルディスクリプタ
-  // path : リダイレクト先ファイル
-  // flag : open システムコールに渡すフラグ
-  //        入力の場合 O_RDONLY
-  //        出力の場合 O_WRONLY|O_TRUNC|O_CREAT
-  //
+  close(fd);                               // 使い終わったファイルディスクリプタを閉じる
+  if ((fd = open(path, flag, 0644)) < 0) { // ファイルを指定されたフラグで開く
+    perror(path);                               // ファイルを開くのに失敗した場合、エラーメッセージを表示
+    exit(1);                                    // 異常終了
+  }
 }
+  
 
 void externalCom(char *args[]) {                // 外部コマンドを実行する
   int pid, status;
@@ -86,6 +83,12 @@ void externalCom(char *args[]) {                // 外部コマンドを実行�
     exit(1);                                    //     非常事態，親を終了
   }
   if (pid==0) {                                 //   子プロセスなら
+    if (ifile != NULL) {                        // 入力リダイレクト
+      redirect(0, ifile, O_RDONLY);
+    }
+    if (ofile != NULL) {                        // 出力リダイレクト
+      redirect(1, ofile, O_WRONLY | O_TRUNC | O_CREAT);
+    }
     execvp(args[0], args);                      //     コマンドを実行
     perror(args[0]);
     exit(1);
@@ -130,3 +133,42 @@ int main() {
   return 0;
 }
 
+/*動作テスト
+% make　　　　　　　　　　　　　//コンパイル時エラーなし
+cc -D_GNU_SOURCE -Wall -std=c99 -o myshell myshell.c
+
+% ./myshell　　　　　　　　　　//出力リダイレクト
+Command: ls > a.txt
+Command: ^C  
+% cat a.txt
+Makefile
+README.md
+README.pdf
+a.txt
+myshell
+myshell.c
+
+% echo "ttt" > /root/t.txt  //出力リダイレクト（エラー発生）
+/root/t.txt: No such file or directory
+
+% ./myshell　　　　　　　　　　//出力リダイレクト（上書き）
+Command: echo "aaa" > a.txt
+Command: ^C
+% cat a.txt
+"aaa"
+
+% echo "bbb" > b.txt　　　　　//入力リダイレクト
+% ./myshell         
+Command: cat < b.txt
+bbb
+
+Command: cat < c.txt　　　　　//入力リダイレクト（エラー発生）
+c.txt: No such file or directory
+Command: ^C
+
+
+
+
+
+
+*/
